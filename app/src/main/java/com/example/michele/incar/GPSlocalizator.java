@@ -22,17 +22,24 @@ public class GPSlocalizator implements LocationListener {
         LocationManager lm = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
         boolean isEnabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER);
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(context,"Permision not granted",Toast.LENGTH_SHORT).show();
+            Toast.makeText(context,"Permission not granted",Toast.LENGTH_SHORT).show();
             return null;
         }
 
-        if (isEnabled) {
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 6000, 10, this);
-            Location loc = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            return loc;
-        }
-        else {
-            Toast.makeText(context,"Enable GPS",Toast.LENGTH_LONG).show();
+        boolean ok = true;
+
+        while(ok) {
+            if (isEnabled) {
+                lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 6000, 10, this);
+                Location loc = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                if(loc != null) {
+                    ok = false;
+                    return loc;
+                }
+            } else {
+                Toast.makeText(context, "Enable GPS", Toast.LENGTH_LONG).show();
+            }
+            return null;
         }
         return null;
     }
