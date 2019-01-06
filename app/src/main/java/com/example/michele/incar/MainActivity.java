@@ -20,42 +20,48 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        final boolean[] check = {true};
+        final double[] res = new double[1];
+        final double[] longitudeGPS = new double[1];
+        final double[] latitudeGPS = new double[1];
+        final double[] long2 = new double[1];
+        final double[] lat2 = new double[1];
 
-        //btnGL = (Button)findViewById(R.id.btnGL);
         ActivityCompat.requestPermissions(MainActivity.this,new String[]{Manifest.permission.ACCESS_FINE_LOCATION},123);
-//        btnGL.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
-//                GPSlocalizator gpsL = new GPSlocalizator(getApplicationContext());
-//                Location l = gpsL.getlocation();
-//
-//                if(l != null) {
-//                    double latitudeGPS = l.getLatitude();
-//                    double longitudeGPS = l.getLongitude();
-//
-//                    Toast.makeText(getApplicationContext(),"LAT: " + latitudeGPS + "\nLONG: " + longitudeGPS,Toast.LENGTH_LONG).show();
-//                }
-//            }
-//        });
-
         final Handler handler = new Handler();
         Timer t = new Timer();
         TimerTask doTask = new TimerTask() {
             @Override
             public void run() {
                 handler.post(new Runnable() {
+
                     @Override
                     public void run() {
                         GPSlocalizator gpsL = new GPSlocalizator(getApplicationContext());
                         Location l = gpsL.getlocation();
 
-                        double latitudeGPS = l.getLatitude();
-                        double longitudeGPS = l.getLongitude();
-                        Toast.makeText(getApplicationContext(),"LAT: " + latitudeGPS + "\nLONG: " + longitudeGPS,Toast.LENGTH_LONG).show();
+                        if(l != null) {
+                            latitudeGPS[0] = l.getLatitude();
+                            longitudeGPS[0] = l.getLongitude();
+
+                            if(check[0]) {
+                                lat2[0] = latitudeGPS[0];
+                                long2[0] = longitudeGPS[0];
+                                check[0] = false;
+                            } else {
+                                Haversine hrv = new Haversine();
+                                res[0] = hrv.distance(lat2[0],long2[0],latitudeGPS[0],longitudeGPS[0]);
+                                check[0] = true;
+                            }
+                            if(check[0]) {
+                                Toast.makeText(getApplicationContext(),"RES: " + res[0] + "\nL1 = " + lat2[0] +
+                                        "\nLO1 = " + long2[0] + "\nL2 = " + latitudeGPS[0] + "\nLO2 = " + longitudeGPS[0],Toast.LENGTH_LONG).show();
+                            }
+                        }
                     }
                 });
             }
         };
-        t.schedule(doTask,0,2000);
+        t.schedule(doTask,100,30000);
     }
 }
