@@ -20,10 +20,11 @@ import android.widget.Toast;
 
 import java.util.Timer;
 import java.util.TimerTask;
-
 import static java.lang.System.exit;
 
+
 public class MainActivity extends AppCompatActivity {
+    private NotificationManager mNotificationManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,7 +36,8 @@ public class MainActivity extends AppCompatActivity {
         final double[] latitudeGPS = new double[1];
         final double[] long2 = new double[1];
         final double[] lat2 = new double[1];
-        final double ti = 30000.0000;
+        final double ti = 30000;
+        final boolean[] notif = new boolean[1];
 
         final Intent andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
         if(andrAuto == null) {
@@ -49,7 +51,15 @@ public class MainActivity extends AppCompatActivity {
                     })
                     .setNegativeButton("Disable Notification", new DialogInterface.OnClickListener() {
                         public void onClick(DialogInterface dialog, int id) {
-                            Toast.makeText(getApplicationContext(),"Ok, Notifications Disabled",Toast.LENGTH_LONG).show();
+                            mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+
+                            // Check if the notification policy access has been granted for the app.
+                            if (!mNotificationManager.isNotificationPolicyAccessGranted()) {
+                                Intent intent = new Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+                                startActivity(intent);
+                            }
+                            //changeInterruptionFiler(NotificationManager.INTERRUPTION_FILTER_NONE);
+                            Toast.makeText(getApplicationContext(), "Ok, I will disable the notifications ", Toast.LENGTH_LONG).show();
                         }
                     });
             builder.create().show();
@@ -82,12 +92,14 @@ public class MainActivity extends AppCompatActivity {
                                 Haversine hrv = new Haversine();
                                 res[0] = hrv.distance(lat2[0],long2[0],latitudeGPS[0],longitudeGPS[0]);
                                 this.vel = res[0] / ti;
-                                if(this.vel >= 10) {
+                                if(this.vel >= 0.01) {
                                     try {
                                         startActivity(andrAuto);
                                     } catch (Exception e){
-                                        exit(1);
+                                        changeInterruptionFiler(NotificationManager.INTERRUPTION_FILTER_PRIORITY);
                                     }
+                                } else {
+                                    changeInterruptionFiler(NotificationManager.INTERRUPTION_FILTER_ALL);
                                 }
                                 check[0] = true;
                             }
@@ -102,4 +114,59 @@ public class MainActivity extends AppCompatActivity {
         };
         t.schedule(doTask,100, (long) ti);
     }
+
+    protected void changeInterruptionFiler(int interruptionFilter){
+        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.M){ // If api level minimum 23
+            /*
+                boolean isNotificationPolicyAccessGranted ()
+                    Checks the ability to read/modify notification policy for the calling package.
+                    Returns true if the calling package can read/modify notification policy.
+                    Request policy access by sending the user to the activity that matches the
+                    system intent action ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS.
+
+                    Use ACTION_NOTIFICATION_POLICY_ACCESS_GRANTED_CHANGED to listen for
+                    user grant or denial of this access.
+
+                Returns
+                    boolean
+
+            */
+            // If notification policy access granted for this package
+            if(mNotificationManager.isNotificationPolicyAccessGranted()){
+                /*
+                    void setInterruptionFilter (int interruptionFilter)
+                        Sets the current notification interruption filter.
+
+                        The interruption filter defines which notifications are allowed to interrupt
+                        the user (e.g. via sound & vibration) and is applied globally.
+
+                        Only available if policy access is granted to this package.
+
+                    Parameters
+                        interruptionFilter : int
+                        Value is INTERRUPTION_FILTER_NONE, INTERRUPTION_FILTER_PRIORITY,
+                        INTERRUPTION_FILTER_ALARMS, INTERRUPTION_FILTER_ALL
+                        or INTERRUPTION_FILTER_UNKNOWN.
+                */
+
+                // Set the interruption filter
+                mNotificationManager.setInterruptionFilter(interruptionFilter);
+            }else {
+                /*
+                    String ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS
+                        Activity Action : Show Do Not Disturb access settings.
+                        Users can grant and deny access to Do Not Disturb configuration from here.
+
+                    Input : Nothing.
+                    Output : Nothing.
+                    Constant Value : "android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS"
+                */
+                // If notification policy access not granted for this package
+                Intent intent = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+                startActivity(intent);
+            }
+        }
+    }
 }
+
+
