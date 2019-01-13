@@ -16,6 +16,8 @@ import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
 import java.util.Timer;
@@ -38,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
         final double[] lat2 = new double[1];
         final double ti = 30000;
         final boolean[] notif = new boolean[1];
+        Button btn;
 
         final Intent andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
         if(andrAuto == null) {
@@ -65,6 +68,14 @@ public class MainActivity extends AppCompatActivity {
             builder.create().show();
         }
 
+        btn = (Button) findViewById(R.id.button_setting);
+        btn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this,SetActivity.class));
+            }
+        });
+
         ActivityCompat.requestPermissions(MainActivity.this,new String[]{Manifest.permission.ACCESS_FINE_LOCATION},123);
         final Handler handler = new Handler();
         Timer t = new Timer();
@@ -91,8 +102,17 @@ public class MainActivity extends AppCompatActivity {
                             } else {
                                 Haversine hrv = new Haversine();
                                 res[0] = hrv.distance(lat2[0],long2[0],latitudeGPS[0],longitudeGPS[0]);
-                                this.vel = res[0] / ti;
-                                if(this.vel >= 0.01) {
+
+                                // TIME CALC -------
+
+                                double sec = ti / 1000;
+                                double min = sec / 60;
+                                double hours = sec / 3600;
+
+                                // -----------------
+
+                                this.vel = res[0] / hours;
+                                if(this.vel >= 10) {
                                     try {
                                         startActivity(andrAuto);
                                     } catch (Exception e){
