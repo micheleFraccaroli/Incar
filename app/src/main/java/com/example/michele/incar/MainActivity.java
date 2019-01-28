@@ -21,8 +21,10 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.CharArrayWriter;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
@@ -38,28 +40,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     Interpreter tflite;
     private SensorManager mSensorManager;
     private Sensor mAccelerometer;
+    private Intent andrAuto;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        final boolean[] check = {true};
-        final double[] res = new double[1];
-        final double[] longitudeGPS = new double[1];
-        final double[] latitudeGPS = new double[1];
-        final double[] long2 = new double[1];
-        final double[] lat2 = new double[1];
-        final double ti = 30000;
-        final boolean[] notif = new boolean[1];
-
 
         try {
             tflite = new Interpreter(loadModelFile(this));
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        final Intent andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
+        andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
         if (andrAuto == null) {
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle("Confirm to open Play Store")
@@ -86,6 +79,35 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
 
         ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 123);
+
+        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mSensorManager.registerListener((SensorEventListener) this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+    }
+
+    protected void onResume() {
+        super.onResume();
+        mSensorManager.registerListener((SensorEventListener) this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+    }
+
+    protected void onPause() {
+        super.onPause();
+        mSensorManager.unregisterListener((SensorEventListener) this);
+    }
+
+    public void onSensorChanged(SensorEvent event) {
+        float[][] toInf = new float[1][3];
+        final boolean[] check = {true};
+        final double[] res = new double[1];
+        final double[] longitudeGPS = new double[1];
+        final double[] latitudeGPS = new double[1];
+        final double[] long2 = new double[1];
+        final double[] lat2 = new double[1];
+        final double ti = 30000;
+        final boolean[] notif = new boolean[1];
+
+        andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
+
         final Handler handler = new Handler();
         Timer t = new Timer();
         TimerTask doTask = new TimerTask() {
@@ -129,6 +151,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                     }
                                 } else {
                                     changeInterruptionFiler(NotificationManager.INTERRUPTION_FILTER_ALL);
+                                    onResume();
                                 }
                                 check[0] = true;
                             }
@@ -143,32 +166,28 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         };
         //t.schedule(doTask,100, (long) ti);
 
-        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        mSensorManager.registerListener((SensorEventListener) this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-    }
-
-    protected void onResume() {
-        super.onResume();
-        mSensorManager.registerListener((SensorEventListener) this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-    }
-
-    protected void onPause() {
-        super.onPause();
-        mSensorManager.unregisterListener((SensorEventListener) this);
-    }
-
-    public void onSensorChanged(SensorEvent event) {
-
-        float[][] toInf = new float[1][3];
         toInf[0][0] = event.values[0];
         toInf[0][1] = event.values[1];
         toInf[0][2] = event.values[2];
         Log.d("--------------------------->", toInf[0][0] + " " + toInf[0][1] + " " + toInf[0][2]);
 
+        TextView textV = (TextView) findViewById(R.id.textView3);
+
         String output = (String) inference(toInf);
+        if(output == "yes") {
+            Log.d("INTOIFFFF", "nell'if");
+            onPause();
+            t.schedule(doTask,100, (long) ti);
+            //Toast.makeText(MainActivity.this, "Prediction: in auto", Toast.LENGTH_SHORT).show();
+            textV.setText("IN AUTO");
+        } else {
+            Log.d("INTOIFFFF", "nell'else");
+            textV.setText("NOT IN AUTO");
+            onResume();
+            t.cancel();
+        }
         Log.d("PREDICTION --------------------------->", output + " auto");
-        Toast.makeText(MainActivity.this, "Prediction: " + output + " in auto", Toast.LENGTH_SHORT).show();
+
     }
 
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
