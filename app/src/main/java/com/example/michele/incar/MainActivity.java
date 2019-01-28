@@ -33,9 +33,11 @@ import java.util.TimerTask;
 import org.tensorflow.lite.Interpreter;
 
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements SensorEventListener {
     private NotificationManager mNotificationManager;
     Interpreter tflite;
+    private SensorManager mSensorManager;
+    private Sensor mAccelerometer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,17 +51,16 @@ public class MainActivity extends AppCompatActivity {
         final double[] lat2 = new double[1];
         final double ti = 30000;
         final boolean[] notif = new boolean[1];
-        final SensorManager mSensorManager;
-        final Sensor mAccelerometer;
+
 
         try {
             tflite = new Interpreter(loadModelFile(this));
-        } catch (Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
         final Intent andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
-        if(andrAuto == null) {
+        if (andrAuto == null) {
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle("Confirm to open Play Store")
                     .setMessage("If you wish, you can download the \"Android Auto\" app for a better driving experience.\nIf you don't want, I will disable all notification.")
@@ -84,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
             builder.create().show();
         }
 
-        ActivityCompat.requestPermissions(MainActivity.this,new String[]{Manifest.permission.ACCESS_FINE_LOCATION},123);
+        ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 123);
         final Handler handler = new Handler();
         Timer t = new Timer();
         TimerTask doTask = new TimerTask() {
@@ -99,17 +100,17 @@ public class MainActivity extends AppCompatActivity {
                         GPSlocalizator gpsL = new GPSlocalizator(getApplicationContext());
                         Location l = gpsL.getlocation();
 
-                        if(l != null) {
+                        if (l != null) {
                             latitudeGPS[0] = l.getLatitude();
                             longitudeGPS[0] = l.getLongitude();
 
-                            if(check[0]) {
+                            if (check[0]) {
                                 lat2[0] = latitudeGPS[0];
                                 long2[0] = longitudeGPS[0];
                                 check[0] = false;
                             } else {
                                 Haversine hrv = new Haversine();
-                                res[0] = hrv.distance(lat2[0],long2[0],latitudeGPS[0],longitudeGPS[0]);
+                                res[0] = hrv.distance(lat2[0], long2[0], latitudeGPS[0], longitudeGPS[0]);
 
                                 // TIME CALC -------
 
@@ -120,10 +121,10 @@ public class MainActivity extends AppCompatActivity {
                                 // -----------------
 
                                 this.vel = res[0] / hours;
-                                if(this.vel >= 10) {
+                                if (this.vel >= 10) {
                                     try {
                                         startActivity(andrAuto);
-                                    } catch (Exception e){
+                                    } catch (Exception e) {
                                         changeInterruptionFiler(NotificationManager.INTERRUPTION_FILTER_PRIORITY);
                                     }
                                 } else {
@@ -131,9 +132,9 @@ public class MainActivity extends AppCompatActivity {
                                 }
                                 check[0] = true;
                             }
-                            if(check[0]) {
-                                Toast.makeText(getApplicationContext(),"RES: " + res[0] + "\nL1 = " + lat2[0] +
-                                        "\nLO1 = " + long2[0] + "\nL2 = " + latitudeGPS[0] + "\nLO2 = " + longitudeGPS[0] + "\n\nVEL: " + vel,Toast.LENGTH_LONG).show();
+                            if (check[0]) {
+                                Toast.makeText(getApplicationContext(), "RES: " + res[0] + "\nL1 = " + lat2[0] +
+                                        "\nLO1 = " + long2[0] + "\nL2 = " + latitudeGPS[0] + "\nLO2 = " + longitudeGPS[0] + "\n\nVEL: " + vel, Toast.LENGTH_LONG).show();
                             }
                         }
                     }
@@ -142,33 +143,35 @@ public class MainActivity extends AppCompatActivity {
         };
         //t.schedule(doTask,100, (long) ti);
 
-        mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
+        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        mSensorManager.registerListener(new SensorEventListener() {
-            @Override
-            public void onSensorChanged(SensorEvent event) {
+        mSensorManager.registerListener((SensorEventListener) this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+    }
 
-                float[][] toInf = new float[1][3];
-                toInf[0][0] = event.values[0];
-                toInf[0][1] = event.values[1];
-                toInf[0][2] = event.values[2];
-//                toInf[0][0] = (float) 7.202;
-//                toInf[0][1] = (float) -0.306;
-//                toInf[0][2] = (float) 6.129;
+    protected void onResume() {
+        super.onResume();
+        mSensorManager.registerListener((SensorEventListener) this, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+    }
 
-                Log.d("--------------------------->", toInf[0][0] + " " + toInf[0][1] + " " + toInf[0][2]);
+    protected void onPause() {
+        super.onPause();
+        mSensorManager.unregisterListener((SensorEventListener) this);
+    }
 
-                String output = (String) inference(toInf);
-                Log.d("PREDICTION --------------------------->",output+" auto");
-                Toast.makeText(MainActivity.this, "Prediction: " + output + " in auto", Toast.LENGTH_SHORT).show();
-            }
+    public void onSensorChanged(SensorEvent event) {
 
-            @Override
-            public void onAccuracyChanged(Sensor sensor, int accuracy) {
-            }
+        float[][] toInf = new float[1][3];
+        toInf[0][0] = event.values[0];
+        toInf[0][1] = event.values[1];
+        toInf[0][2] = event.values[2];
+        Log.d("--------------------------->", toInf[0][0] + " " + toInf[0][1] + " " + toInf[0][2]);
 
-        }, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        String output = (String) inference(toInf);
+        Log.d("PREDICTION --------------------------->", output + " auto");
+        Toast.makeText(MainActivity.this, "Prediction: " + output + " in auto", Toast.LENGTH_SHORT).show();
+    }
 
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
 
     public String inference(float[][] toInf) {
