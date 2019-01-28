@@ -1,32 +1,41 @@
 package com.example.michele.incar;
 
 import android.Manifest;
-import android.app.NotificationChannel;
+import android.app.Activity;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.res.AssetFileDescriptor;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
+import android.util.Log;
 import android.widget.Toast;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.Timer;
 import java.util.TimerTask;
-import static java.lang.System.exit;
+
+import org.tensorflow.lite.Interpreter;
 
 
 public class MainActivity extends AppCompatActivity {
     private NotificationManager mNotificationManager;
+    Interpreter tflite;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,7 +49,14 @@ public class MainActivity extends AppCompatActivity {
         final double[] lat2 = new double[1];
         final double ti = 30000;
         final boolean[] notif = new boolean[1];
-        Button btn;
+        final SensorManager mSensorManager;
+        final Sensor mAccelerometer;
+
+        try {
+            tflite = new Interpreter(loadModelFile(this));
+        } catch (Exception e){
+            e.printStackTrace();
+        }
 
         final Intent andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
         if(andrAuto == null) {
@@ -67,14 +83,6 @@ public class MainActivity extends AppCompatActivity {
                     });
             builder.create().show();
         }
-
-        btn = (Button) findViewById(R.id.button_setting);
-        btn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(MainActivity.this,SetActivity.class));
-            }
-        });
 
         ActivityCompat.requestPermissions(MainActivity.this,new String[]{Manifest.permission.ACCESS_FINE_LOCATION},123);
         final Handler handler = new Handler();
@@ -132,61 +140,77 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         };
-        t.schedule(doTask,100, (long) ti);
+        //t.schedule(doTask,100, (long) ti);
+
+        mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
+        mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mSensorManager.registerListener(new SensorEventListener() {
+            @Override
+            public void onSensorChanged(SensorEvent event) {
+
+                float[][] toInf = new float[1][3];
+                toInf[0][0] = event.values[0];
+                toInf[0][1] = event.values[1];
+                toInf[0][2] = event.values[2];
+//                toInf[0][0] = (float) 7.202;
+//                toInf[0][1] = (float) -0.306;
+//                toInf[0][2] = (float) 6.129;
+
+                Log.d("--------------------------->", toInf[0][0] + " " + toInf[0][1] + " " + toInf[0][2]);
+
+                String output = (String) inference(toInf);
+                Log.d("PREDICTION --------------------------->",output+" auto");
+                Toast.makeText(MainActivity.this, "Prediction: " + output + " in auto", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            }
+
+        }, mAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+
+    }
+
+    public String inference(float[][] toInf) {
+        float[][] output = new float[1][2];
+        String inference;
+
+        try {
+            tflite.run(toInf,output);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        if(output[0][0] > output[0][1]) {
+            //return output[0][0];
+            inference = "no";
+        } else {
+            //return output[0][1];
+            inference = "yes";
+        }
+        return inference;
     }
 
     protected void changeInterruptionFiler(int interruptionFilter){
-        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.M){ // If api level minimum 23
-            /*
-                boolean isNotificationPolicyAccessGranted ()
-                    Checks the ability to read/modify notification policy for the calling package.
-                    Returns true if the calling package can read/modify notification policy.
-                    Request policy access by sending the user to the activity that matches the
-                    system intent action ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS.
-
-                    Use ACTION_NOTIFICATION_POLICY_ACCESS_GRANTED_CHANGED to listen for
-                    user grant or denial of this access.
-
-                Returns
-                    boolean
-
-            */
-            // If notification policy access granted for this package
+        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.M){
             if(mNotificationManager.isNotificationPolicyAccessGranted()){
-                /*
-                    void setInterruptionFilter (int interruptionFilter)
-                        Sets the current notification interruption filter.
-
-                        The interruption filter defines which notifications are allowed to interrupt
-                        the user (e.g. via sound & vibration) and is applied globally.
-
-                        Only available if policy access is granted to this package.
-
-                    Parameters
-                        interruptionFilter : int
-                        Value is INTERRUPTION_FILTER_NONE, INTERRUPTION_FILTER_PRIORITY,
-                        INTERRUPTION_FILTER_ALARMS, INTERRUPTION_FILTER_ALL
-                        or INTERRUPTION_FILTER_UNKNOWN.
-                */
-
-                // Set the interruption filter
                 mNotificationManager.setInterruptionFilter(interruptionFilter);
             }else {
-                /*
-                    String ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS
-                        Activity Action : Show Do Not Disturb access settings.
-                        Users can grant and deny access to Do Not Disturb configuration from here.
-
-                    Input : Nothing.
-                    Output : Nothing.
-                    Constant Value : "android.settings.NOTIFICATION_POLICY_ACCESS_SETTINGS"
-                */
-                // If notification policy access not granted for this package
                 Intent intent = new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
                 startActivity(intent);
             }
         }
     }
+    /** Memory-map the model file in Assets. */
+    private MappedByteBuffer loadModelFile(Activity activity) throws IOException {
+        AssetFileDescriptor fileDescriptor = activity.getAssets().openFd("acc.tflite");
+        FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
+        FileChannel fileChannel = inputStream.getChannel();
+        long startOffset = fileDescriptor.getStartOffset();
+        long declaredLength = fileDescriptor.getDeclaredLength();
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength);
+    }
+
 }
 
 

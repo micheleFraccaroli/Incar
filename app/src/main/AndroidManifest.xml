@@ -20,8 +20,7 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>import android.content.Intent;
-        <activity android:name=".SetActivity"></activity>
+        </activity>
     </application>
 
 </manifest>
