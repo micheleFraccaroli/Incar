@@ -6,7 +6,9 @@ import android.app.NotificationManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.res.AssetFileDescriptor;
+import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -21,23 +23,22 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import java.io.CharArrayWriter;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Timer;
 import java.util.TimerTask;
-
 import org.tensorflow.lite.Interpreter;
 
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
     private NotificationManager mNotificationManager;
     Interpreter tflite;
+    SharedPreferences prefs = null;
     private SensorManager mSensorManager;
     private Sensor mAccelerometer;
     private Intent andrAuto;
@@ -52,30 +53,35 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         } catch (Exception e) {
             e.printStackTrace();
         }
-        andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
-        if (andrAuto == null) {
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            builder.setTitle("Confirm to open Play Store")
-                    .setMessage("If you wish, you can download the \"Android Auto\" app for a better driving experience.\nIf you don't want, I will disable all notification.")
-                    .setPositiveButton("Go", new DialogInterface.OnClickListener() {
-                        public void onClick(DialogInterface dialog, int id) {
-                            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.projection.gearhead")));
-                        }
-                    })
-                    .setNegativeButton("Disable Notification", new DialogInterface.OnClickListener() {
-                        public void onClick(DialogInterface dialog, int id) {
-                            mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
-                            // Check if the notification policy access has been granted for the app.
-                            if (!mNotificationManager.isNotificationPolicyAccessGranted()) {
-                                Intent intent = new Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
-                                startActivity(intent);
+        andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
+        prefs = getSharedPreferences("myPref", MODE_PRIVATE);
+        if (andrAuto == null) {
+            //if(prefs.getBoolean("firstrun", true)) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.setTitle("Confirm to open Play Store")
+                        .setMessage("If you wish, you can download the \"Android Auto\" app for a better driving experience.\nIf you don't want, I will disable all notification.")
+                        .setPositiveButton("Download", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int id) {
+                                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.projection.gearhead")));
                             }
-                            //changeInterruptionFiler(NotificationManager.INTERRUPTION_FILTER_NONE);
-                            Toast.makeText(getApplicationContext(), "Ok, I will disable the notifications ", Toast.LENGTH_LONG).show();
-                        }
-                    });
-            builder.create().show();
+                        })
+                        .setNegativeButton("Disable Notification", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int id) {
+                                mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+
+                                // Check if the notification policy access has been granted for the app.
+                                if (!mNotificationManager.isNotificationPolicyAccessGranted()) {
+                                    Intent intent = new Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+                                    startActivity(intent);
+                                }
+                                //changeInterruptionFiler(NotificationManager.INTERRUPTION_FILTER_NONE);
+                                Toast.makeText(getApplicationContext(), "Ok, I will disable the notifications ", Toast.LENGTH_LONG).show();
+                            }
+                        });
+                builder.create().show();
+                //prefs.edit().putBoolean("firstrun", false).commit();
+            //}
         }
 
         ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 123);
@@ -143,7 +149,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                 // -----------------
 
                                 this.vel = res[0] / hours;
-                                if (this.vel >= 10) {
+                                if (this.vel >= 20) {
                                     try {
                                         startActivity(andrAuto);
                                     } catch (Exception e) {
@@ -172,6 +178,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Log.d("--------------------------->", toInf[0][0] + " " + toInf[0][1] + " " + toInf[0][2]);
 
         TextView textV = (TextView) findViewById(R.id.textView3);
+        TextView textT = (TextView) findViewById(R.id.textView4);
+        ImageView car = (ImageView) findViewById(R.id.imageView);
+        ImageView gps = (ImageView) findViewById(R.id.imageView8);
 
         String output = (String) inference(toInf);
         if(output == "yes") {
@@ -179,15 +188,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             onPause();
             t.schedule(doTask,100, (long) ti);
             //Toast.makeText(MainActivity.this, "Prediction: in auto", Toast.LENGTH_SHORT).show();
+            textT.setText("GPS ATTIVATO");
             textV.setText("IN AUTO");
+            car.setColorFilter(Color.GREEN);
+            gps.setColorFilter(Color.GREEN);
         } else {
             Log.d("INTOIFFFF", "nell'else");
             textV.setText("NOT IN AUTO");
-            onResume();
             t.cancel();
+            textT.setText("GPS DISATTIVATO");
+            car.setColorFilter(Color.DKGRAY);
+            gps.setColorFilter(Color.DKGRAY);
+            //onResume();
         }
         Log.d("PREDICTION --------------------------->", output + " auto");
-
     }
 
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -225,7 +239,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
     /** Memory-map the model file in Assets. */
     private MappedByteBuffer loadModelFile(Activity activity) throws IOException {
-        AssetFileDescriptor fileDescriptor = activity.getAssets().openFd("acc.tflite");
+        AssetFileDescriptor fileDescriptor = activity.getAssets().openFd("ANN.tflite");
         FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
         FileChannel fileChannel = inputStream.getChannel();
         long startOffset = fileDescriptor.getStartOffset();

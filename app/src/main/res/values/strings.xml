@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Incar (α)</string>
+    <string name="app_name">Incar</string>
     <string name="notificationChannel">Notification</string>
     <string name="channelDescription">test description notification</string>
     <string name="CHANNEL_ID">123123</string>
