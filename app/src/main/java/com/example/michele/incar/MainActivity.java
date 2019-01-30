@@ -30,6 +30,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import org.tensorflow.lite.Interpreter;
@@ -42,6 +45,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private SensorManager mSensorManager;
     private Sensor mAccelerometer;
     private Intent andrAuto;
+    ArrayList<float[][]> list_toInf = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -103,23 +107,47 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     public void onSensorChanged(SensorEvent event) {
         float[][] toInf = new float[1][3];
+
+        toInf[0][0] = event.values[0];
+        toInf[0][1] = event.values[1];
+        toInf[0][2] = event.values[2];
+        Log.d("--------------------------->", toInf[0][0] + " " + toInf[0][1] + " " + toInf[0][2]);
+
+        list_toInf.add(toInf);
+        Log.d("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~>", String.valueOf(list_toInf.size()));
+        if(list_toInf.size() == 20) {
+            onPause();
+            reasoning(list_toInf);
+            list_toInf.clear();
+        }
+    }
+
+    // AI SECTION ---------------------------------------------------------------------------------------------------------------
+
+    public void reasoning(ArrayList<float[][]> list_toInf){
         final boolean[] check = {true};
         final double[] res = new double[1];
         final double[] longitudeGPS = new double[1];
         final double[] latitudeGPS = new double[1];
         final double[] long2 = new double[1];
         final double[] lat2 = new double[1];
-        final double ti = 30000;
-        final boolean[] notif = new boolean[1];
+        final double ti = 15000;
+
+        TextView textV = (TextView) findViewById(R.id.textView3);
+        TextView textT = (TextView) findViewById(R.id.textView4);
+        ImageView car = (ImageView) findViewById(R.id.imageView);
+        ImageView gps = (ImageView) findViewById(R.id.imageView8);
 
         andrAuto = getPackageManager().getLaunchIntentForPackage("com.google.android.projection.gearhead");
 
         final Handler handler = new Handler();
-        Timer t = new Timer();
+        final Timer t = new Timer();
         TimerTask doTask = new TimerTask() {
             @Override
             public void run() {
                 handler.post(new Runnable() {
+                    ImageView car = (ImageView) findViewById(R.id.imageView);
+                    ImageView gps = (ImageView) findViewById(R.id.imageView8);
 
                     private double vel;
 
@@ -149,15 +177,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                 // -----------------
 
                                 this.vel = res[0] / hours;
-                                if (this.vel >= 20) {
+                                if (this.vel >= 25) {
                                     try {
+                                        car.setColorFilter(Color.GREEN);
+                                        gps.setColorFilter(Color.GREEN);
                                         startActivity(andrAuto);
                                     } catch (Exception e) {
+                                        car.setColorFilter(Color.GREEN);
+                                        gps.setColorFilter(Color.GREEN);
                                         changeInterruptionFiler(NotificationManager.INTERRUPTION_FILTER_PRIORITY);
                                     }
                                 } else {
                                     changeInterruptionFiler(NotificationManager.INTERRUPTION_FILTER_ALL);
                                     onResume();
+                                    t.cancel();
                                 }
                                 check[0] = true;
                             }
@@ -170,61 +203,61 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 });
             }
         };
-        //t.schedule(doTask,100, (long) ti);
 
-        toInf[0][0] = event.values[0];
-        toInf[0][1] = event.values[1];
-        toInf[0][2] = event.values[2];
-        Log.d("--------------------------->", toInf[0][0] + " " + toInf[0][1] + " " + toInf[0][2]);
+        // NEURAL NETWORK INFERENCE ----------------------------------------------------------------
 
-        TextView textV = (TextView) findViewById(R.id.textView3);
-        TextView textT = (TextView) findViewById(R.id.textView4);
-        ImageView car = (ImageView) findViewById(R.id.imageView);
-        ImageView gps = (ImageView) findViewById(R.id.imageView8);
+        String output = (String) inference(list_toInf);
 
-        String output = (String) inference(toInf);
         if(output == "yes") {
             Log.d("INTOIFFFF", "nell'if");
             onPause();
             t.schedule(doTask,100, (long) ti);
             //Toast.makeText(MainActivity.this, "Prediction: in auto", Toast.LENGTH_SHORT).show();
-            textT.setText("GPS ATTIVATO");
-            textV.setText("IN AUTO");
-            car.setColorFilter(Color.GREEN);
-            gps.setColorFilter(Color.GREEN);
+            textT.setText("GPS SIGNAL ON");
+            textV.setText("MAYBE IN AUTO");
+            car.setColorFilter(Color.BLUE);
+            gps.setColorFilter(Color.BLUE);
         } else {
             Log.d("INTOIFFFF", "nell'else");
-            textV.setText("NOT IN AUTO");
             t.cancel();
-            textT.setText("GPS DISATTIVATO");
+            textV.setText("NOT IN AUTO");
+            textT.setText("GPS SIGNAL OFF");
             car.setColorFilter(Color.DKGRAY);
             gps.setColorFilter(Color.DKGRAY);
-            //onResume();
+            onResume();
         }
+
         Log.d("PREDICTION --------------------------->", output + " auto");
     }
 
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    public String inference(ArrayList<float[][]> list_toInf) {
+        float[][] output = new float[1][2];
+        List<String> list_res = new ArrayList<>();
+
+        for (int i = 0; i <= list_toInf.size(); i++) {
+            try {
+                tflite.run(list_toInf.get(i),output);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            if(output[0][0] > output[0][1]) {
+                list_res.add("no");
+            } else {
+                list_res.add("si");
+            }
+        }
+
+        if(Collections.frequency(list_res,"no") > Collections.frequency(list_res,"yes")) {
+            return "no";
+        } else {
+            return "yes";
+        }
     }
 
-    public String inference(float[][] toInf) {
-        float[][] output = new float[1][2];
-        String inference;
+    // ---------------------------------------------------------------------------------------------------------------------------
 
-        try {
-            tflite.run(toInf,output);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        if(output[0][0] > output[0][1]) {
-            //return output[0][0];
-            inference = "no";
-        } else {
-            //return output[0][1];
-            inference = "yes";
-        }
-        return inference;
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
 
     protected void changeInterruptionFiler(int interruptionFilter){

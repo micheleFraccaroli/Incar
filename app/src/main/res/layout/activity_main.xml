@@ -13,7 +13,7 @@
         android:layout_height="77dp"
         android:layout_marginStart="16dp"
         android:layout_marginBottom="116dp"
-        android:text="TextView"
+        android:text="GPS SIGNAL OFF"
         android:textSize="24sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
@@ -39,7 +39,7 @@
         android:layout_marginStart="16dp"
         android:layout_marginEnd="160dp"
         android:layout_marginBottom="192dp"
-        android:text="TextView"
+        android:text="NOT IN CAR"
         android:textAlignment="viewStart"
         android:textSize="24sp"
         app:layout_constraintBottom_toBottomOf="parent"
